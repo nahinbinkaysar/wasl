@@ -3,11 +3,27 @@ import CryptoKit
 import Network
 import Observation
 
+struct PhoneNotif: Identifiable {
+    let id, app, title, text: String
+    let time: Date
+
+    init?(_ m: [String: Any]) {
+        guard let id = m["id"] as? String else { return nil }
+        self.id = id
+        app = m["app"] as? String ?? ""
+        title = m["title"] as? String ?? ""
+        text = m["text"] as? String ?? ""
+        time = (m["time"] as? Double).map { Date(timeIntervalSince1970: $0 / 1000) } ?? .now
+    }
+}
+
 // ponytail: everything runs on the main queue; traffic is a few small frames, no need for more.
 @Observable final class Sync {
     private(set) var peers = 0
     private(set) var relayUp = false
+    private(set) var phoneNotifs: [PhoneNotif] = [] // newest first
     let key = Keychain.pairingKey()
+    let notifications = PhoneNotifications()
 
     private var conns: [NWConnection] = [] { didSet { peers = conns.count } }
     private var listener: NWListener?
@@ -15,6 +31,7 @@ import Observation
     private var lastChange = NSPasteboard.general.changeCount
 
     init() {
+        notifications.onDismiss = { [weak self] id in self?.clear(id) }
         startListener()
         connectRelay()
         // NSPasteboard has no change event; polling changeCount is what every clipboard app does.
@@ -96,16 +113,32 @@ import Observation
         guard let box = try? AES.GCM.SealedBox(combined: frame),
               let plain = try? AES.GCM.open(box, using: key) else { return false }
         guard let msg = try? JSONSerialization.jsonObject(with: plain) as? [String: Any] else { return true }
-        if msg["t"] as? String == "clip", let text = msg["text"] as? String {
+        switch msg["t"] as? String {
+        case "clip":
+            guard let text = msg["text"] as? String else { break }
             let pb = NSPasteboard.general
             pb.clearContents()
             pb.setString(text, forType: .string)
             lastChange = pb.changeCount
+        case "notif":
+            guard let n = PhoneNotif(msg) else { break }
+            phoneNotifs.removeAll { $0.id == n.id }
+            phoneNotifs.insert(n, at: 0)
+            notifications.show(msg)
+        case "notifs":
+            let items = msg["items"] as? [[String: Any]] ?? []
+            phoneNotifs = items.compactMap(PhoneNotif.init).sorted { $0.time > $1.time }
+            notifications.replaceAll(items)
+        case "notif_removed":
+            guard let id = msg["id"] as? String else { break }
+            phoneNotifs.removeAll { $0.id == id }
+            notifications.remove(id)
+        default: break
         }
         return true
     }
 
-    private func broadcast(_ msg: [String: String]) {
+    private func broadcast(_ msg: [String: Any]) {
         guard let plain = try? JSONSerialization.data(withJSONObject: msg),
               let frame = try? AES.GCM.seal(plain, using: key).combined else { return }
         let ctx = NWConnection.ContentContext(identifier: "frame",
@@ -126,6 +159,17 @@ import Observation
         guard types.isDisjoint(with: ["org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType"]),
               let text = pb.string(forType: .string) else { return }
         broadcast(["t": "clip", "text": text])
+    }
+
+    /// Clears one notification here, in Notification Center, and on the phone.
+    func clear(_ id: String) {
+        phoneNotifs.removeAll { $0.id == id }
+        notifications.remove(id)
+        broadcast(["t": "dismiss", "id": id])
+    }
+
+    func clearAll() {
+        for n in phoneNotifs { clear(n.id) }
     }
 
     func copyPairingCode() {

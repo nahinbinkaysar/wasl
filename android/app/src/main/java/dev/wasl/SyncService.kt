@@ -38,6 +38,10 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.concurrent.thread
 
 class SyncService : Service() {
+    companion object {
+        var instance: SyncService? = null
+    }
+
     private val main = Handler(Looper.getMainLooper())
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
     private lateinit var frames: Frames
@@ -55,6 +59,7 @@ class SyncService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(1, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        instance = this
         val key = Prefs.key(this) ?: return START_NOT_STICKY.also { stopSelf() }
         frames = Frames(key)
         if (discovery == null) {
@@ -69,6 +74,7 @@ class SyncService : Service() {
     }
 
     override fun onDestroy() {
+        instance = null
         discovery?.let { nsd.stopServiceDiscovery(it) }
         logcat?.destroy()
         socket?.cancel()
@@ -86,6 +92,9 @@ class SyncService : Service() {
             "${base.trimEnd('/')}/ws?room=${frames.room}&token=$token"
         } ?: return
         socket = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                main.post { NotifListener.instance?.let { send(it.snapshot()) } }
+            }
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                 val plain = frames.open(bytes.toByteArray()) ?: return webSocket.cancel()
                 main.post { handle(JSONObject(String(plain))) }
@@ -136,10 +145,11 @@ class SyncService : Service() {
                 lastText = text
                 clipboard.setPrimaryClip(ClipData.newPlainText("wasl", text)) // writing works in background
             }
+            "dismiss" -> NotifListener.instance?.cancelNotification(msg.getString("id"))
         }
     }
 
-    private fun send(msg: JSONObject) {
+    fun send(msg: JSONObject) {
         socket?.send(frames.seal(msg.toString().toByteArray()).toByteString())
     }
 

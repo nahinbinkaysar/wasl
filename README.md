@@ -1,6 +1,6 @@
 # Wasl
 
-Native Mac ⇄ Android link: clipboard sync for now, with notifications and messages next.
+Native Mac ⇄ Android link: clipboard sync and notification mirroring, with messages next.
 The two devices talk directly over the LAN, or through an optional self-hosted relay when they're apart.
 Every frame is end-to-end encrypted with a key that never leaves your devices. See [PROTOCOL.md](PROTOCOL.md).
 
@@ -41,6 +41,12 @@ adb shell appops set dev.wasl SYSTEM_ALERT_WINDOW allow
 ```
 
 Android 13+ asks "allow access to device logs" each time the service starts.
+
+To mirror notifications into the Mac's Notification Center, grant notification access. Clearing a notification on either device clears it on the other.
+
+```sh
+adb shell cmd notification allow_listener dev.wasl/dev.wasl.NotifListener
+```
 
 ## Relay (optional, for when you're away from home)
 

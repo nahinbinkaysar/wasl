@@ -47,6 +47,9 @@ class MainActivity : Activity() {
                 For background clipboard sync, run once from your computer:
                 adb shell pm grant $packageName android.permission.READ_LOGS
                 adb shell appops set $packageName SYSTEM_ALERT_WINDOW allow
+
+                For notification sync:
+                adb shell cmd notification allow_listener $packageName/$packageName.NotifListener
             """.trimIndent()
         }
 

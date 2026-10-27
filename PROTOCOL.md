@@ -18,5 +18,9 @@ Plaintext is UTF-8 JSON with a `t` (type) field:
 | t | fields | direction |
 |---|---|---|
 | `clip` | `text` | both |
+| `notif` | `id`, `app`, `title`, `text`, `time` (ms since epoch) | phone → Mac, posted or updated |
+| `notifs` | `items`: list of `notif` objects | phone → Mac, full list on connect |
+| `notif_removed` | `id` | phone → Mac |
+| `dismiss` | `id` | Mac → phone, cleared on the Mac |
 
 Unknown types are ignored, so new clients and old clients can talk to each other.
