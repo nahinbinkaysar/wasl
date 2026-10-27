@@ -10,13 +10,22 @@ Every frame is end-to-end encrypted with a key that never leaves your devices. S
 | `android/` | Kotlin app with a foreground service |
 | `relay/` | Go relay; forwards ciphertext only |
 
-## Mac
+## Download
+
+Get the latest build from [Releases](https://github.com/nahinbinkaysar/wasl/releases/latest):
+
+- **Mac:** `Wasl-<version>-macOS.zip` for Apple Silicon, macOS 14+. It's ad-hoc signed, so the first time you open it, right-click it and choose **Open**.
+- **Android:** `Wasl-<version>.apk` for Android 10+. Install it with `adb install`, then pair as described below.
+
+Or build from source:
+
+### Mac
 
 ```sh
 macos/bundle.sh && open macos/build/Wasl.app
 ```
 
-## Android
+### Android
 
 Build with Android Studio, or run `./gradlew installDebug` in `android/`. Then pair:
 
